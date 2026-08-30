@@ -1,0 +1,32 @@
+{
+  "title": "macro_ir_reliability: likelihood and information diagnostics for macroscopic ion-channel currents",
+  "upload_type": "software",
+  "license": "GPL-3.0-or-later",
+  "version": "1.0.0",
+  "language": "eng",
+  "creators": [
+    {
+      "name": "Moffatt, Luciano",
+      "orcid": "0000-0003-4994-4304",
+      "affiliation": "Instituto de Química Física de los Materiales, Medio Ambiente y Energía (INQUIMAE), CONICET, Universidad de Buenos Aires"
+    }
+  ],
+  "description": "<p>C++20 engine for the likelihood of macroscopic ion-channel current recordings under the MacroIR family of algorithms, together with the run scripts and the R notebooks that produced the figures of <em>Likelihood approximations distort the ion channel kinetic information in macroscopic currents</em>.</p><p>The simulation output the figures are drawn from is too large to live here and is deposited separately: <a href=\"https://doi.org/10.5281/zenodo.22167744\">10.5281/zenodo.22167744</a>. Most of it cannot be regenerated, because the production lanes drew their random seed from the system entropy source and never recorded it; the data record is the only copy.</p><p><code>provenance/</code> carries the three source files that differ across the four code states used over the campaign, and maps the directory names in the data record to the commits that wrote them. See the README for how to build, how to run a <code>.macroir</code> program, and the order the figure notebooks must be rendered in.</p>",
+  "keywords": [
+    "ion channels",
+    "patch clamp",
+    "Fisher information",
+    "maximum likelihood",
+    "Markov models",
+    "macroscopic currents",
+    "single-channel kinetics"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.5281/zenodo.22167744",
+      "relation": "isSupplementTo",
+      "resource_type": "dataset",
+      "scheme": "doi"
+    }
+  ]
+}

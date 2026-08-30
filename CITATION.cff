@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+title: macro_ir_reliability
+message: >-
+  If you use this software, please cite both it and the companion
+  data record listed under identifiers.
+type: software
+authors:
+  - family-names: Moffatt
+    given-names: Luciano
+    orcid: "https://orcid.org/0000-0003-4994-4304"
+    affiliation: >-
+      Instituto de Química Física de los Materiales, Medio Ambiente
+      y Energía (INQUIMAE), CONICET, Universidad de Buenos Aires
+repository-code: "https://github.com/lmoffatt/macro_ir_reliability"
+abstract: >-
+  C++20 engine for the likelihood of macroscopic ion-channel current
+  recordings under the MacroIR family of algorithms, together with the
+  run scripts and R notebooks that produced the figures of
+  "Likelihood approximations distort the ion channel kinetic
+  information in macroscopic currents".
+keywords:
+  - ion channels
+  - patch clamp
+  - Fisher information
+  - maximum likelihood
+  - Markov models
+  - macroscopic currents
+license: GPL-3.0-or-later
+version: 1.0.0
+date-released: "2026-08-30"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22167744
+    description: Companion data record

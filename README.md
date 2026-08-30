@@ -253,5 +253,10 @@ vendored Catch2 under `third_party/catch2/` is Boost Software License 1.0. The
 figures and the analysis notebooks under `projects/eLife_2025/figures/` are
 CC-BY, as is the companion data record.
 
-Cite both this record and the data record; their DOIs are listed at the top of
-this file.
+Cite both this record and the data record. `CITATION.cff` in the repository root
+carries the machine-readable form, which is what GitHub's "Cite this repository"
+button and most reference managers read.
+
+The data record is <https://doi.org/10.5281/zenodo.22167744>. The DOI for this
+software record is minted when the release is archived, and appears at the top of
+this file once it exists.
