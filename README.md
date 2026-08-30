@@ -6,6 +6,9 @@ Code and analysis pipeline behind
 > macroscopic currents**
 > Luciano Moffatt
 
+This record: <https://doi.org/10.5281/zenodo.22168409>
+(all versions: <https://doi.org/10.5281/zenodo.22168408>)
+
 It contains the C++20 engine that computes the likelihood of a macroscopic
 patch-clamp recording under the MacroIR family of algorithms, the run scripts
 that drove the simulation campaign, and the R notebooks that turn the campaign
@@ -257,6 +260,7 @@ Cite both this record and the data record. `CITATION.cff` in the repository root
 carries the machine-readable form, which is what GitHub's "Cite this repository"
 button and most reference managers read.
 
-The data record is <https://doi.org/10.5281/zenodo.22167744>. The DOI for this
-software record is minted when the release is archived, and appears at the top of
-this file once it exists.
+The data record is <https://doi.org/10.5281/zenodo.22167744>. This software
+record is <https://doi.org/10.5281/zenodo.22168409>; cite that one, which points
+at this exact tree, rather than the all-versions DOI, which resolves to whatever
+is newest.

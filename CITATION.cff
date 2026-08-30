@@ -28,7 +28,11 @@ keywords:
 license: GPL-3.0-or-later
 version: 1.0.0
 date-released: "2026-08-30"
+doi: 10.5281/zenodo.22168409
 identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22168408
+    description: Concept DOI, resolves to the latest version
   - type: doi
     value: 10.5281/zenodo.22167744
     description: Companion data record
