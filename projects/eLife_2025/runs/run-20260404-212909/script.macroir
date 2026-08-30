@@ -1,0 +1,55 @@
+model = load_model("scheme_CO")
+
+parameter = load_parameters(model, "data/models/scheme_CO_par.csv")
+
+
+experiment = create_experiment(experiment_structure=[{5,50,0.0},{4,25,10.0},{4,50,10.0},{4,100,10.0},{4,200,10.0},{4,400,10.0},{4,800,10.0},
+{4,25,0.0},{4,50,0.0},{4,100,0.0},{4,200,0.0},{4,400,0.0}], 
+frequency_of_sampling = 50e3,
+initial_agonist = 0.0, 
+initial_time = 0.0)
+                                
+observations = set_observations(values_set= [0,0,0,0])
+
+par_tr = get_standard_parameter_transformed_values(parameter)
+ 
+model_str="scheme_CO"
+
+
+simulations =  simulate(model= model, parameter_transformed = par_tr, n_simulations= 2048, experiment = experiment,
+                         observations = observations, number_of_substeps = indexed_by(axis(name= "n_substeps",
+                labels = ["100"]),values= [100]), seed = 0)
+
+
+simulation_file = write_csv(experiment= experiment, simulations=simulations,
+   path= "figures/data/figure_2_simulation")
+
+
+algorithm_axis = axis(name= "algorithm", labels= ["macro_MNRV", "macro_MRV", "macro_IRV", "macro_IRTV"])
+
+algo_recursive_approximation=indexed_bool_by(axis= algorithm_axis, values=[false,true,true,true])
+algo_taylor_approximation=indexed_bool_by(axis= algorithm_axis, values=[false,false,false,true])
+
+algorithms = build_likelihood_function(model =model,
+            adaptive_approximation = false,
+            recursive_approximation = algo_recursive_approximation,
+            averaging_approximation = indexed_int_by(axis= algorithm_axis, values=[1,1,2,2]),
+            variance_approximation = true,
+            taylor_variance_correction = algo_taylor_approximation)
+
+
+
+
+dlikelihood_predictions = calc_dlikelihood_predictions(likelihood_algorithm =algorithms, parameters=par_tr, experiment =experiment,
+data_series = simulations)
+
+dlikelihood_file = write_csv(experiment= experiment, simulations = simulations, likelihood = dlikelihood_predictions,
+   path= "figures/data/figure_2_dlikelihood_predictions")
+
+
+likelihood_analysis = likelihood_derivative_diagnostics(dlikelihood_predictions = dlikelihood_predictions , n_boostrap_samples=1000,
+            probits = [ 0.025 , 0.975 ] , seed=42)
+
+
+likelihood_analysis_res = write_csv(analysis = likelihood_analysis,
+   path= "figures/data/figure_2_dlikelihood_analysis")

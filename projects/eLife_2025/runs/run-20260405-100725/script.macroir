@@ -1,0 +1,68 @@
+model = load_model("scheme_CO")
+
+parameter = load_parameters(model, "data/models/scheme_CO_par.csv")
+
+parameter = create_parameters(model = model, parameters_info= [{"on","Log10",10,0},
+{"off","Log10",100},
+{"unitary_current","Log10",1},
+{"Current_Noise","Log10",0.001},
+{"Current_Baseline","Log10",1},
+{"Num_ch_mean","Log10",500}]
+)
+
+
+
+experiment = create_experiment(
+   experiment_structure=[{10,50,0.0},
+   {2,1,10.0},{2,2,10.0},{2,5,10.0},{2,10,10.0},{2,20,10.0},{2,50,10.0},
+   {2,100,10.0},{2,200,10.0},{2,500,10.0},{2,1000,10.0},{2,2000,10.0},
+   {2,1,0.0},{2,2,0.0},{2,5,0.0},{2,10,0.0},{2,20,0.0},{2,50,0.0},
+   {2,100,0.0},{2,200,0.0},{2,500,0.0},{2,1000,0.0},{2,2000,0.0}], 
+frequency_of_sampling = 50e3,
+initial_agonist = 0.0, 
+initial_time = 0.0)
+                                
+observations = set_observations(values_set= [0,0,0,0])
+
+par_tr = get_standard_parameter_transformed_values(parameter)
+ 
+model_str="scheme_CO"
+
+
+simulations =  simulate(model= model, parameter_transformed = par_tr, n_simulations= 256, experiment = experiment,
+                         observations = observations, number_of_substeps = indexed_by(axis(name= "n_substeps",
+                labels = ["100"]),values= [100]), seed = 0)
+
+
+simulation_file = write_csv(experiment= experiment, simulations=simulations,
+   path= "figures/data/figure_2_simulation")
+
+
+algorithm_axis = axis(name= "algorithm", labels= ["macro_MNRV", "macro_MRV", "macro_IRV", "macro_IRTV"])
+
+algo_recursive_approximation=indexed_bool_by(axis= algorithm_axis, values=[false,true,true,true])
+algo_taylor_approximation=indexed_bool_by(axis= algorithm_axis, values=[false,false,false,true])
+
+algorithms = build_likelihood_function(model =model,
+            adaptive_approximation = false,
+            recursive_approximation = algo_recursive_approximation,
+            averaging_approximation = indexed_int_by(axis= algorithm_axis, values=[1,1,2,2]),
+            variance_approximation = true,
+            taylor_variance_correction = algo_taylor_approximation)
+
+
+
+
+dlikelihood_predictions = calc_dlikelihood_predictions(likelihood_algorithm =algorithms, parameters=par_tr, experiment =experiment,
+data_series = simulations)
+
+dlikelihood_file = write_csv(experiment= experiment, simulations = simulations, likelihood = dlikelihood_predictions,
+   path= "figures/data/figure_2_dlikelihood_predictions")
+
+
+likelihood_analysis = likelihood_derivative_diagnostics(dlikelihood_predictions = dlikelihood_predictions , n_boostrap_samples=1000,
+            probits = [ 0.025 , 0.975 ] , seed=42)
+
+
+likelihood_analysis_res = write_csv(analysis = likelihood_analysis,
+   path= "figures/data/figure_2_dlikelihood_analysis")

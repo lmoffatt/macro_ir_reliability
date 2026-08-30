@@ -1,0 +1,19 @@
+CompileFlags:
+  CompilationDatabase: build/gcc-debug
+  Add: [
+    -ftemplate-backtrace-limit=0
+  ]
+  Remove: [-ftime-report]
+
+Index:
+  Background: Build
+
+Diagnostics:
+  ClangTidy:
+    Remove: [modernize-use-trailing-return-type]  
+  UnusedIncludes: Strict
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes

@@ -1,0 +1,5 @@
+{
+  "cwd": "/PATH/TO/DEPOSIT/projects/eLife_2025",
+  "timestamp": 1780884916,
+  "args": ["/PATH/TO/DEPOSIT/build/gcc-release/macrodr_cli", "--axis_Nchanels = axis(name= "Num_ch", labels= ["10000"])", "--Num_ch = indexed_double_by(axis= axis_Nchanels, values=[10000])", "--n_simulations = get_number(n=8)", "--filepath = "figures/data/figure_2_nch_10000_nsim_8_macro_IR_noise_0.1_h_1e-5"", "--axis_noise = axis(name= "noise_in_conductance_tau", labels= ["0.1"])", "--current_noise = indexed_double_by(axis= axis_noise, values=[0.0001])", "--algorithm_axis = axis(name= "algorithm", labels= ["macro_IR"])", "--algo_recursive_approximation = indexed_bool_by(axis= algorithm_axis, values=[true])", "--algo_averaging_approximation = indexed_int_by(axis= algorithm_axis, values=[2])", "--algo_taylor_approximation = indexed_bool_by(axis= algorithm_axis, values=[false])", "--algo_micro_approximation = indexed_bool_by(axis= algorithm_axis, values=[false])", "--axis_h_fim = axis(name= "axis_h_fim", labels= ["1e-5"])", "--h_rel_value = indexed_double_by(axis= axis_h_fim, values=[1e-5])", "/PATH/TO/DEPOSIT/projects/eLife_2025/ops/local/figure_2_debug.macroir"]
+}

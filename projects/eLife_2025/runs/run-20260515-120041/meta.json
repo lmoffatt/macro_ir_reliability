@@ -1,0 +1,5 @@
+{
+  "cwd": "/PATH/TO/DEPOSIT/projects/eLife_2025",
+  "timestamp": 1778857241,
+  "args": ["../../build/gcc-release/macrodr_cli", "ops/local/Figure_2_Macro_IRT_test.macroir"]
+}

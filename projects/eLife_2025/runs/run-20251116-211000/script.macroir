@@ -1,0 +1,53 @@
+model = load_model("scheme_CO")
+
+parameter = load_parameters(model, "data/models/scheme_CO_par.csv")
+
+
+"create_experiment",
+        dsl::to_typed_function<std::vector<std::tuple<std::size_t, std::size_t, double>>, double,
+                               double, double>(&macrodr::cmd::create_experiment,
+                                               "experiment_structure", "frequency_of_sampling",
+                                               "initial_ATP", "initial_time"));
+
+
+experiment = create_experiment(experiment_structure=[{1,100,0.0},{1,1000,10.0}], 
+frequency_of_sampling = 50e3,
+initial_ATP = 0.0, 
+initial_time = 0.0)
+                                
+observations = set_observations(values= [0,0])
+
+par_values = get_standard_parameter_values(parameter)
+
+
+model_str="scheme_CO"
+
+
+
+simulation  = simulate(model= model, parameter_values = par_values, experiment = experiment,
+                         observations = observations, number_of_substeps = 10, seed = 42)
+
+dlogLik = calc_dlikelihood(model = model, parameters = par_values, experiment = experiment, data = simulation,
+            adaptive_approximation = 0, recursive_approximation = 1, averaging_approximation = 2,
+            variance_approximation = 1, taylor_variance_correction = 0)
+
+logLik = calc_likelihood(model = model, parameters = par_values, experiment = experiment, data = simulation,
+            adaptive_approximation = 0, recursive_approximation = 1, averaging_approximation = 2,
+            variance_approximation = 1, taylor_variance_correction = 0)
+
+difflogLik = calc_diff_likelihood(model = model, parameters = par_values, experiment = experiment, data = simulation,
+            adaptive_approximation = 0, recursive_approximation = 1, averaging_approximation = 2,
+            variance_approximation = 1, taylor_variance_correction = 0, delta_param =1e-5)
+
+
+
+
+logLikP = calc_likelihood_predictions(model = model, parameters = par_values, experiment = experiment, data = simulation,
+            adaptive_approximation = 0, recursive_approximation = 1, averaging_approximation = 2,
+            variance_approximation = 1, taylor_variance_correction = 0)
+
+
+dlogLikP = calc_dlikelihood_predictions(model = model_str, parameters = par_values, experiment = experiment, data = simulation,
+            adaptive_approximation = 0, recursive_approximation = 1, averaging_approximation = 2,
+            variance_approximation = 1, taylor_variance_correction = 0)
+

@@ -1,0 +1,90 @@
+model = load_model("scheme_CO")
+
+axis_interval = axis(name= "interval_in_tau", labels= ["0.01"])
+axis_noise = axis(name= "noise_in_conductance_tau", labels= ["0.1"])
+axis_Nchanels =axis(name= "Num_ch", labels= ["1", "10"])
+
+current_noise= indexed_double_by(axis= axis_noise,values=[0.0001])
+
+
+Num_ch = indexed_double_by(axis= axis_Nchanels,values=[1, 10])
+
+
+n_interval = indexed_size_by(axis= axis_interval,values=[100])
+
+
+
+parameter = create_parameters(
+   model = model, 
+   parameters_info= [   
+      {"on","Log10",10},
+{"off","Log10",100},
+{"unitary_current","Log10",1},
+{"Current_Noise","Log10",current_noise},
+{"Current_Baseline","Log10",1},
+{"Num_ch_mean","Log10", Num_ch}]
+)
+
+
+
+
+
+experiment = create_experiment(
+   experiment_structure=[
+      {indexed_size_by(axis= axis_interval,values=[1]),indexed_size_by(axis= axis_interval,values=[500]),0.0},
+      {indexed_size_by(axis= axis_interval,values=[2]),indexed_size_by(axis= axis_interval,values=[500]),10.0},
+      {indexed_size_by(axis= axis_interval,values=[3]),indexed_size_by(axis= axis_interval,values=[500]),0.0}
+      ], 
+frequency_of_sampling = 50e3,
+initial_agonist = 0.0, 
+initial_time = 0.0)
+                                
+observations = set_observations(values_set= [0,0,0,0])
+
+par_tr = get_standard_parameter_transformed_values(parameter)
+ 
+model_str="scheme_CO"
+
+simulation_axis = axis(name= "simulation_algorithm", labels= ["substeps_1000"])
+
+
+simulations =  simulate(model= model, parameter_transformed = par_tr, n_simulations= 1280, experiment = experiment,
+                         observations = observations, 
+                         simulation_algorithm= indexed_string_by(axis= simulation_axis, values=["substeps"]),
+                         number_of_substeps = indexed_size_by(axis=simulation_axis,values= [1000]),
+                 seed = 0)
+
+
+
+simulation_file = write_csv(experiment= experiment, simulations=simulations,
+   path= "figures/data/figure_2_simulation_debug")
+
+
+algorithm_axis = axis(name= "algorithm", labels= ["macro_MNRV", "macro_MRV", "macro_IRV", "macro_IRTV"])
+
+algo_recursive_approximation=indexed_bool_by(axis= algorithm_axis, values=[false,true,true,true])
+algo_taylor_approximation=indexed_bool_by(axis= algorithm_axis, values=[false,false,false,true])
+
+algorithms = build_likelihood_function(model =model,
+            adaptive_approximation = false,
+            recursive_approximation = algo_recursive_approximation,
+            averaging_approximation = indexed_int_by(axis= algorithm_axis, values=[1,1,2,2]),
+            variance_approximation = true,
+            taylor_variance_correction = algo_taylor_approximation)
+
+
+
+
+dlikelihood_predictions = calc_dlikelihood_predictions(likelihood_algorithm =algorithms, parameters=par_tr, experiment =experiment,
+data_series = simulations)
+
+dlikelihood_file = write_csv(experiment= experiment, simulations = simulations, likelihood = dlikelihood_predictions,
+   path= "figures/data/figure_2_dlikelihood_predictions_debug")
+
+
+likelihood_analysis = likelihood_derivative_diagnostics(dlikelihood_predictions = dlikelihood_predictions , n_boostrap_samples=100,
+            probits = [ 0.025 , 0.975 ] , seed=0)
+
+
+likelihood_analysis_res = write_csv(analysis = likelihood_analysis,
+   path= "figures/data/figure_2_dlikelihood_analysis_debug")

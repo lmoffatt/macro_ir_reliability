@@ -1,0 +1,232 @@
+#ifndef CLI_MACRO_DR_BASE_H
+#define CLI_MACRO_DR_BASE_H
+
+#include <macrodr/cmd/load_model.h>
+#include <macrodr/dsl/function_builder.h>
+
+#include <cstddef>
+#include <fstream>
+#include <string>
+#include <utility>
+
+#include "experiment.h"
+#include "maybe_error.h"
+#include "mcmc.h"
+
+namespace macrodr::cmd {
+
+inline auto get_random_id(std::string prefix) {
+    return prefix + "_" + std::to_string(calc_seed(0ul));
+}
+
+inline std::size_t get_number(std::size_t number) {
+    return number;
+}
+
+inline void write_text(std::string filename, std::string s) {
+    std::ofstream f(filename);
+    f << s;
+}
+
+static constexpr inline auto temp_script_file = "temp_script_file.txt";
+inline void write_script(std::string program_name) {
+    rename(temp_script_file, program_name.c_str());
+}
+
+inline auto load_Parameter_value(const std::string filename, std::string separator) {
+    return std::pair(filename, separator);
+}
+
+// Alias for readability in MacroIR scripts
+inline auto get_parameter_values(const std::string filename, std::string separator) {
+    return load_Parameter_value(filename, std::move(separator));
+}
+
+inline auto load_Prior_value(std::string filename, std::string separator = ",") {
+    return std::pair(filename, separator);
+}
+
+inline auto load_Recording_value(std::string filename, std::string separator = ",") {
+    return std::pair(filename, separator);
+}
+
+inline auto load_fractioned_Recording_value(std::string filename, std::string separator = ",") {
+    return std::pair(filename, separator);
+}
+
+inline auto load_fractioned_Experiment(std::string filename, std::string separator = ",") {
+    return std::pair(filename, separator);
+}
+inline auto get_function_Table_maker_value_St(std::string filename) {
+    return filename;
+}
+
+using recording_value_type =
+    typename return_type<std::decay_t<decltype(&load_Recording_value)>>::type;
+using prior_value_type = typename return_type<std::decay_t<decltype(&load_Prior_value)>>::type;
+using parameters_value_type =
+    typename return_type<std::decay_t<decltype(&load_Parameter_value)>>::type;
+
+inline auto get_Prior(double prior_error, const std::string modelname) {
+    return std::pair(prior_error, modelname);
+}
+
+inline auto set_Likelihood_algorithm(bool adaptive_aproximation, bool recursive_approximation,
+                                     int averaging_approximation,
+                                     bool variance_correction_approximation,
+                                     bool variance_correction, std::size_t n_sub_dt) {
+    return std::tuple(adaptive_aproximation, recursive_approximation, averaging_approximation,
+                      variance_correction, variance_correction_approximation, n_sub_dt);
+}
+
+using likelihood_algo_type =
+    typename return_type<std::decay_t<decltype(&set_Likelihood_algorithm)>>::type;
+
+inline auto get_function_Table_maker_value(std::string filename,
+                                           std::size_t num_scouts_per_ensemble) {
+    return std::pair(filename, num_scouts_per_ensemble);
+}
+
+struct simulation_algo_type {
+    bool include_N_states = false;
+    std::string algorithm = "substeps";
+    std::size_t number_of_substeps = 0;
+
+    friend std::ostream& operator<<(std::ostream& os, simulation_algo_type const& value) {
+        os << "include_N_states=" << value.include_N_states << ", algorithm=" << value.algorithm
+           << ", number_of_substeps=" << value.number_of_substeps;
+        return os;
+    }
+};
+
+inline auto set_simulation_algorithm(bool includeN, std::size_t n_sub_dt) {
+    return simulation_algo_type{includeN, "substeps", n_sub_dt};
+}
+
+inline Maybe_error<simulation_algo_type> set_simulation_algorithm(bool includeN,
+                                                                  std::string algorithm) {
+    if (algorithm == "uniformization") {
+        return simulation_algo_type{includeN, std::move(algorithm), 0};
+    }
+    if (algorithm == "substeps") {
+        return error_message(
+            "simulation_algorithm(include_N_states, algorithm=\"substeps\") is not supported; "
+            "use number_of_substeps instead");
+    }
+    return error_message("unsupported simulation algorithm \"", algorithm,
+                         "\"; expected \"uniformization\"");
+}
+
+inline dsl::Compiler<dsl::Lexer> make_utilities_compiler() {
+    dsl::Compiler<dsl::Lexer> cm;
+    cm.push_function("get_random_Id",
+                     dsl::to_typed_function<std::string>(&get_random_id, "prefix"));
+    cm.push_function("get_number", dsl::to_typed_function<std::size_t>(&get_number, "n"));
+
+    cm.push_function("mult", dsl::to_typed_function<std::size_t,std::size_t>([](std::size_t n, std::size_t m) { return n * m; }, "n", "m"));
+    cm.push_function("mult", dsl::to_typed_function<double,double>([](double n, double m) { return n * m; }, "n", "m"));
+    cm.push_function("sum", dsl::to_typed_function<std::size_t,std::size_t>([](std::size_t n, std::size_t m) { return n + m; }, "n", "m"));
+    cm.push_function("sum", dsl::to_typed_function<double,double>([](double n, double m) { return n + m; }, "n", "m"));
+    cm.push_function("max", dsl::to_typed_function<double,double>([](double n, double m) { return (n > m) ? n : m; }, "n", "m"));
+    cm.push_function("max", dsl::to_typed_function<std::size_t,std::size_t>([](std::size_t n, std::size_t m) { return (n > m) ? n : m; }, "n", "m"));
+    cm.push_function("min", dsl::to_typed_function<double,double>([](double n, double m) { return (n < m) ? n : m; }, "n", "m"));
+    cm.push_function("min", dsl::to_typed_function<std::size_t,std::size_t>([](std::size_t n, std::size_t m) { return (n < m) ? n : m; }, "n", "m"));
+
+    // String concatenation — lets .macroir scripts derive output paths/run ids
+    // from injected string parameters (e.g. write_csv path = concat(prefix, suffix)),
+    // so dispatched jobs each write to a distinct path. Binary; nest for 3+ pieces.
+    cm.push_function("concat", dsl::to_typed_function<std::string, std::string>(
+                                   [](std::string a, std::string b) { return a + b; }, "a", "b"));
+
+    return cm;
+}
+
+inline auto make_io_compiler() {
+    auto cm = dsl::Compiler<dsl::Lexer>{};
+    using namespace cmd;
+    cm.push_function("write_text", dsl::to_typed_function<std::string, std::string>(
+                                       &write_text, "filename", "text"));
+
+    cm.push_function("write_script",
+                     dsl::to_typed_function<std::string>(&write_script, "script_name"));
+
+    cm.push_function("load_Parameter", dsl::to_typed_function<std::string, std::string>(
+                                           &load_Parameter_value, "filename", "separator"));
+    cm.push_function("get_parameter_values", dsl::to_typed_function<std::string, std::string>(
+                                               &get_parameter_values, "filename", "separator"));
+
+    cm.push_function("load_Prior", dsl::to_typed_function<std::string, std::string>(
+                                       &load_Prior_value, "filename", "separator"));
+
+    return cm;
+}
+
+inline dsl::Compiler<dsl::Lexer> make_experiment_compiler() {
+    dsl::Compiler<dsl::Lexer> cm;
+    cm.push_function("get_Observations",
+                     dsl::to_typed_function<   std::string>(&get_Observations, "filename"));
+    cm.push_function("idealize_Experiment",
+                     dsl::to_typed_function< std::string, std::string, std::string>(
+                         &idealize_Experiment, "experiment_filename", "sep", "idealized_filename"));
+    cm.push_function("get_function_Table_maker",
+                     dsl::to_typed_function<std::string, std::size_t>(
+                         &get_function_Table_maker_value, "filename", "num_scouts_per_ensemble"));
+    cm.push_function("get_Experiment",
+                     dsl::to_typed_function<std::string, double, double>(
+                         &get_Experiment, "filename", "frequency_of_sampling", "initial_agonist"));
+    cm.push_function("get_Experiment_file",
+                     dsl::to_typed_function<std::string, double, double>(
+                         &get_Experiment_file, "filename", "frequency_of_sampling", "initial_agonist"));
+    return cm;
+}
+
+inline dsl::Compiler<dsl::Lexer> make_model_compiler() {
+
+    dsl::Compiler<dsl::Lexer> cm;
+    // cm.push_function("load_model", dsl::to_typed_function<std::string>(&load_model, "model_name"));
+
+    cm.push_function("get_Prior", dsl::to_typed_function<double, std::string>(
+                                      &get_Prior, "prior_error", "model"));
+
+    cm.push_function(
+        "set_Likelihood_algorithm",
+        dsl::to_typed_function<    bool, bool, int, bool, bool, std::size_t>(
+            &set_Likelihood_algorithm, "adaptive_aproximation", "recursive_approximation",
+            "averaging_approximation", "variance_correction_approximation",
+            "variance_approximation", "n_sub_dt"));
+    // cm.push_function("set_fraction_algorithm", dsl::to_typed_function<double, double, std::string>(
+    //                                                &set_Fraction_algorithm, "min_fraction",
+    //                                                "n_points_per_decade_fraction", "segments"));
+
+    cm.push_function("simulation_algorithm",
+                     dsl::to_typed_function<bool, std::size_t>(
+                         static_cast<simulation_algo_type (*)(bool, std::size_t)>(
+                             &set_simulation_algorithm),
+                         "include_N_states", "number_of_substeps"));
+    cm.push_function(
+        "simulation_algorithm",
+        dsl::to_typed_return_function<Maybe_error<simulation_algo_type>, bool, std::string>(
+            static_cast<Maybe_error<simulation_algo_type> (*)(bool, std::string)>(
+                &set_simulation_algorithm),
+            "include_N_states", "algorithm"));
+    return cm;
+}
+#ifdef ZOMBIE
+namespace zombie {
+inline dsl::Compiler<dsl::Lexer> make_frac_compiler() {
+    dsl::Compiler<dsl::Lexer> cm;
+    cm.push_function(
+        "fraction_experiment",
+        dsl::to_typed_function<std::string, std::string, experiment_type, fraction_algo_type,
+                               Maybe_error<std::size_t>, std::size_t>(
+            &calc_experiment_fractions, "save_name", "recording", "experiment",
+            "fraction_algorithm", "number_of_parameters", "init_seed"));
+    // Aquí irían fraction_simulation, fraction_likelihood, evidence_fraction si están activos
+    return cm;
+}
+}  // namespace zombie
+#endif
+
+}  // namespace macrodr::cmd
+
+#endif  // CLI_MACRO_DR_BASE_H

@@ -1,0 +1,5 @@
+{
+  "cwd": "/PATH/TO/DEPOSIT/projects/eLife_2025",
+  "timestamp": 1768520055,
+  "args": ["/PATH/TO/DEPOSIT/build/gcc-debug/macrodr_cli", "ops/local/figure_2.macroir", "--env-save", "step"]
+}

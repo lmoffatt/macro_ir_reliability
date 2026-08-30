@@ -1,0 +1,33 @@
+# Build artefacts
+build/
+_build/
+cmake-build-*/
+compile_commands.json
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+
+# Run output. The campaign writes CSVs and per-step dumps under
+# projects/eLife_2025/figures/data/, which is where the companion data record
+# unpacks. Nothing under it belongs in git.
+projects/eLife_2025/figures/data/
+projects/eLife_2025/figures/figure_4_source_data/
+
+# Deliberately NOT ignored: *.csv and *.rds in general. The working repository
+# this deposit was taken from ignores both, which is why several inputs there
+# had to be force-added. The digests under
+# projects/eLife_2025/figures/in_progress/ir_reliability_20260828/digest/ are
+# part of the deposit and must stay tracked.
+
+# R and editor noise
+.Rhistory
+.RData
+.Rproj.user/
+Rplots.pdf
+*.html
+*~
+.DS_Store

@@ -1,0 +1,115 @@
+#!/bin/bash
+# Build macrodr_cli on a named cluster into a git-tagged directory.
+#
+# Each build lands in build/<cluster>-<tag>/ so a long-running job's binary
+# is never overwritten by a later compile — the running process holds its
+# file open, and future jobs are submitted against a fresh path.
+#
+# Usage:
+#   projects/eLife_2025/ops/build_cluster.sh <cluster> [tag]
+#
+# Examples:
+#   projects/eLife_2025/ops/build_cluster.sh example           # tag = git short hash (default)
+#   projects/eLife_2025/ops/build_cluster.sh example nyquist   # tag = "nyquist" (custom)
+#   projects/eLife_2025/ops/build_cluster.sh example
+#
+# Output:
+#   build/<cluster>-<tag>/macrodr_cli
+#   build/macrodr_cli-<cluster>-current   (symlink to the latest build for that cluster)
+
+# -e: abort on first error; pipefail: pipelines too.
+# Intentionally no -u: OpenHPC's /etc/profile.d/*.sh references unset env vars
+# (e.g. COLORTERM) and we must source /etc/profile to get the module function.
+set -eo pipefail
+
+# sbatch copies the script to a spool dir, so inside a resubmitted job $0 points
+# there, not at the repo. The login-side invocation passes the real OPS_DIR
+# through MACRODR_OPS_DIR so the job can still find clusters/<cluster>.sh.
+OPS_DIR="${MACRODR_OPS_DIR:-$(dirname "$(readlink -f "$0")")}"
+
+CLUSTER="${1:?Usage: $0 <cluster> [tag]    (cluster profile must exist at clusters/<cluster>.sh)}"
+TAG="${2:-$(git rev-parse --short HEAD)}"
+
+PROFILE="${OPS_DIR}/clusters/${CLUSTER}.sh"
+[ -f "$PROFILE" ] || { echo "[build_cluster] No such cluster profile: $PROFILE" >&2; exit 1; }
+
+# Heavy build (~16 GB/TU) — must run on a compute node, never the login node.
+# If not already inside an allocation, resubmit ourselves as a *batch* job
+# (detached → survives disconnects, unlike interactive salloc) and exit. The
+# resubmitted run has SLURM_JOB_ID set, so it falls through and builds.
+# TAG is frozen here so the job builds the commit you submitted at.
+if [ -z "${SLURM_JOB_ID:-}" ]; then
+    echo "[build_cluster] no allocation — submitting build to ${PARTITION:-batch} (watch: tail -f build-${CLUSTER}-<jobid>.out)"
+    exec sbatch --partition="${PARTITION:-batch}" \
+                ${ACCOUNT:+--account="$ACCOUNT"} \
+                --cpus-per-task="${BUILD_CPUS:-2}" --mem="${BUILD_MEM:-64G}" \
+                --time="${BUILD_TIME:-08:00:00}" \
+                --job-name="build_${CLUSTER}" --output="build-${CLUSTER}-%j.out" \
+                --chdir="$PWD" \
+                --export=ALL,MACRODR_OPS_DIR="$OPS_DIR" \
+                "$(readlink -f "$0")" "$CLUSTER" "$TAG"
+fi
+
+# A job submitted with --export=ALL inherits the submitting shell's loaded
+# modules. On clusters whose node /etc/profile auto-loads a default compiler
+# (Clementina loads gnu13/ohpc) under a one-compiler-at-a-time policy, that init
+# collides with an inherited compiler (e.g. gcc15 from a sourced profile) and
+# the build dies before printing anything. Drop the inherited Lmod tracking so
+# /etc/profile and the cluster profile below both start from a clean slate; the
+# profile's `module purge` + loads then set the real toolchain.
+unset LOADEDMODULES _LMFILES_ 2>/dev/null || true
+
+# Lmod's `module` function and OpenHPC /etc/profile.d scripts can return non-zero
+# even on success; under `set -e` that silently aborts the job before any output
+# (Clementina's 2-second death). Disable abort-on-error around environment setup,
+# then restore it so real build failures still stop the job.
+set +e
+[ -f /etc/profile ] && source /etc/profile   # module command on compute/login nodes
+# shellcheck source=/dev/null
+source "$PROFILE"   # loads modules, sets PATH_MACRO + CLUSTER, cd's to repo root
+set -e
+
+BUILD_DIR="build/${CLUSTER}-${TAG}"
+
+# Per-hash build dirs defeat ninja's (per-dir) incrementality, so a new commit
+# rebuilds from scratch. ccache (keyed by source content, shared across dirs)
+# bridges that: unchanged TUs are cache hits even in a fresh dir. Use it if
+# available; harmless no-op otherwise.
+CCACHE="$(command -v ccache || true)"
+# Pass TAG (read from git on the LOGIN node, line 31) as the commit stamp: the
+# compile runs on a compute node where git is usually absent, so the in-build git
+# query would fall back to "unknown". This makes the binary's --commit, the build
+# dir name, and the dispatcher's output folder all agree on TAG.
+cmake -S . -B "$BUILD_DIR" -G "${MACRODR_GENERATOR:-Ninja}" \
+    ${CCACHE:+-DCMAKE_CXX_COMPILER_LAUNCHER="$CCACHE"} \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_COMPILER=g++ \
+    -DMACRODR_GIT_COMMIT_OVERRIDE="$TAG" \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+# cc1plus needs up to ~16 GB on the heaviest TUs (command_manager.cpp,
+# legacy/qmodel.h users — their template instantiations are very wide).
+# Recommended allocation: --cpus-per-task=2 --mem=64G  (32 GB per parallel
+# job). -j defaults to the SLURM allocation; outside SLURM falls back to -j 1
+# to avoid login-node OOM. Override with BUILD_JOBS=N to retune without
+# re-allocating, e.g. BUILD_JOBS=1 projects/.../build_cluster.sh example.
+BUILD_JOBS="${BUILD_JOBS:-${SLURM_CPUS_PER_TASK:-1}}"
+echo "[build_cluster] compiling with -j ${BUILD_JOBS}"
+cmake --build "$BUILD_DIR" -j "${BUILD_JOBS}"
+
+BIN="$(readlink -f "$BUILD_DIR/macrodr_cli")"
+mkdir -p build
+ln -sfn "${CLUSTER}-${TAG}/macrodr_cli" "build/macrodr_cli-${CLUSTER}-current"
+
+echo
+echo "[build_cluster] cluster=${CLUSTER} tag=${TAG}"
+echo "[build_cluster] binary:  ${BIN}"
+echo "[build_cluster] current: build/macrodr_cli-${CLUSTER}-current"
+echo
+echo "Submit example:"
+echo "  sbatch --export=ALL,CLUSTER=${CLUSTER},BIN=${BIN},WORKDIR=/scratch/\$USER/macro_dr/eLife_2025 \\"
+echo "         projects/eLife_2025/ops/slurm/run_macroir.sh \\"
+echo "         projects/eLife_2025/ops/local/figure_2.macroir"
+echo
+echo "  # with overrides (head + injection + body):"
+echo "  #   ... run_macroir.sh fig2_head.macroir \"--Num_ch = ...\" fig2_body.macroir"

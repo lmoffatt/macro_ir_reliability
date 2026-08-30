@@ -1,0 +1,74 @@
+---
+title: "Figure 1 (merged paper) — one filter step over the window × recursion lattice: NR, INR, R, IR"
+author: "Luciano Moffatt"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+Figure 1 for the merged paper. **Four columns**, the 2×2 of the two axes: `NR` neither, `INR` the
+acquisition window only, `R` the recursive update only, `IR` both. `NR` and `INR` are non-recursive,
+so their "Bayes & posterior" row reads "no update (open loop)", which is where the figure says what
+open loop means. `MR` and `VR` are the partial interval corrections, off this lattice, and stay in
+Figures 2, 3 and 4 where the claim that the ladder stops being an ordering needs them.
+`figure_1_all.Rmd` (in `../archive/`) still renders every algorithm for exploration.
+
+**THE TWO LEAST-SQUARES COLUMNS CAME OUT ON 2026-08-12 (Luciano), and the reason is measured, not
+aesthetic.** On this recording the predicted mean of `LSE` is that of `NR` to `8.9e-16` and the
+predicted mean of `ILSE` is that of `INR` to `2.2e-16` (`06_methods.tex`, measured off these same
+dumps), so rows A and B of each least-squares column were a copy of its neighbour's; row C was blank;
+and the whole content of the pair was one constant predictive sd, `3.536` pA for `LSE` and `3.559`
+for `ILSE`, against `NR`'s `0.224` to `2.010`. Two columns for one fact, and a fact the caption now
+states in one sentence ("`LSE` is the `NR` column with every error bar of the same width, `ILSE` the
+`INR` column with a band of constant height"). What the removal buys is width: the panels go from
+about 1.0 in to about 1.55 in, and `IR`'s two occupancy rows, their dashed covariance tie and the
+two-tone boundary disc are the part of the figure that needed it. Predecessor kept for rewind at
+`../archive/figure_1_superseded_20260812.Rmd` and `../archive/Figure_1_superseded_20260812.pdf`
+(six columns, `LSE ILSE NR INR R IR`); the least-squares dumps stay on disk and the roster below
+reaches them by name if the call is ever reversed.
+
+Panels live in `figure_1_panels.R` (shared: it still defines all eight columns, and `build_figure`
+sizes `IR`'s geometry from `length(cols)`).
+
+**Two changes to the panels on 2026-08-12, both from looking at the four-column render (Luciano).**
+The Markov arc's bow is set in inches by `geom_curve`, so widening the panels sent it off the bottom
+of row A in the open-loop columns, taking the arrowhead with it: fixed by `MK_CURV` and an asymmetric
+bottom pad on the row-A range, which are one fix in two places. And the x axis is no longer the
+clock: ticks label the **acquisition interval** at its middle, dotted verticals mark the interval
+boundaries in every panel, and the interval duration (2 ms) is now a caption fact. Both are
+commented at their site in `figure_1_panels.R`; re-check the first if the roster length or the figure
+width ever changes.
+
+**No supplement.** The declared Figure 1—figure supplement 1 was withdrawn on 2026-08-11/12
+(`papers/1_method/decisions.md`, the supplement table): it drew samples 0–4 where the body draws 3–4,
+so it contained the body figure. Its `build_figure(0:4, ...)` call is gone from the chunk below and
+`Figure_S1.pdf` is deleted. Render the wider crop into `../../../../tmp/` if you want to look at it.
+
+(Re-running `ops/local/figure_1_plus_lse.macroir` redraws the whole recording — new random ensemble,
+seed = 0 — so every panel changes trace-by-trace; figure 1 is illustrative, not quantitative, and no
+number is quoted from it anywhere in the paper.)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r panels, include=FALSE}
+source("figure_1_panels.R")
+```
+
+```{r roster}
+# ROSTER OF FOUR, 2026-08-12: the window x recursion lattice. A column auto-drops if its
+# per-interval diagnostic dump is not on disk.
+COLS_TARGET <- c("NR", "INR", "R", "IR")
+# Data-file token per column. Kept as a map because the least-squares tokens are crossed on disk
+# (..._LSE is averaging = 1 and therefore ILSE; ..._LSE_av0 is LSE) and that crossing must stay
+# resolved in one place for whoever puts those columns back.
+.tok <- c(LSE = "LSE_av0", ILSE = "LSE", NR = "NR", INR = "INR", R = "R", IR = "IR")
+COLS <- COLS_TARGET[file.exists(paste0("../data/figure_1_likelihood_diagnostic_", .tok[COLS_TARGET], ".csv"))]
+message("figure_1 roster present: ", paste(COLS, collapse = ", "))
+```
+
+```{r figures}
+# 7.0 in wide: the body figure is declared inside a fullwidth environment. 6.05 in tall so the float
+# plus its legend fits the page (at 7.5 in LaTeX dropped the last lines of the caption).
+build_figure(c(3, 4), "Figure_1.pdf", COLS, hgt = 6.05)   # acquisition intervals 3 and 4
+```

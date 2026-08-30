@@ -1,0 +1,137 @@
+# Figure_2_Macro_IRT_closed_test.macroir
+#
+# Purpose: settle, once and for all, whether the OLD closed-form
+# (Schur-complement, "deepseek-style") MacroIRT variance correction behaves
+# differently from the current rank-2 Newton MacroIRT, and whether EITHER
+# converges toward the EXACT per-channel likelihood (micro).
+#
+# Background: macro_IRT (Newton, PDF rank-2 Woodbury) empirically OVER-inflates
+# y_var and diverges from micro_IR at low Num_ch. The old closed form carries
+# the opposite (variance-SHARPENING) sign in its Schur term
+#   y_var = e + N*ms0 + N*gSg - N*zeta*sSg^2
+# and is closed-form (no Newton AD drift). This test puts all three IRT
+# organizations on the same plot against the exact reference.
+#
+#   I family:  macro_IR   vs macro_IRT(Newton)  vs macro_IRT_closed  vs micro_IR
+#   M family:  macro_MR                                              vs micro_MR
+#
+# Interpretation:
+#   - macro_IR          = Gaussian base (no variance correction)
+#   - macro_IRT         = Gaussian + rank-2 Newton Laplace (current live path)
+#   - macro_IRT_closed  = Gaussian + closed-form Schur Laplace (old path)
+#   - micro_IR / micro_MR = exact reference
+#   If macro_IRT_closed sits between macro_IR and micro_IR (and does NOT
+#   overshoot past micro), the closed form's sharpening sign is the right one.
+#   If macro_IRT_closed lands on top of macro_IRT (within noise), the
+#   organization choice is irrelevant and the IRT family simply does not reach
+#   exact micro at low Num_ch — the definitive negative result.
+#
+# Num_ch restricted to {1, 2, 10}: micro is tractable (k=2, N+1 micro-states)
+# and this is exactly the few-channel regime where the Taylor correction is
+# physically largest and the macro<->micro gap is widest.
+
+model = load_model("scheme_CO")
+
+axis_interval = axis(name= "interval_in_tau", labels= ["1", "0.5","0.2","0.1"])
+axis_noise = axis(name= "noise_in_conductance_tau", labels= ["0.1"])
+axis_Nchanels =axis(name= "Num_ch", labels= ["1","2","10"])
+
+current_noise= indexed_double_by(axis= axis_noise,values=[0.0001])
+Num_ch = indexed_double_by(axis= axis_Nchanels,values=[1,2,10])
+
+parameter = create_parameters(
+   model = model,
+   parameters_info= [
+      {"on","Log10",10},
+{"off","Log10",100},
+{"unitary_current","Log10",1},
+{"Current_Noise","Log10",current_noise},
+{"Current_Baseline","Log10",1},
+{"Num_ch_mean","Log10", Num_ch}]
+)
+
+experiment = create_experiment(
+   experiment_structure=[
+      {indexed_size_by(axis= axis_interval,values=[2,4,10,20]),indexed_size_by(axis= axis_interval,values=[500,250,100,50]),0.0},
+      {indexed_size_by(axis= axis_interval,values=[4,8,20,40]),indexed_size_by(axis= axis_interval,values=[500,250,100,50]),10.0},
+      {indexed_size_by(axis= axis_interval,values=[4,8,20,40]),indexed_size_by(axis= axis_interval,values=[500,250,100,50]),0.0}
+      ],
+frequency_of_sampling = 50e3,
+initial_agonist = 0.0,
+initial_time = 0.0)
+
+observations = set_observations(values_set= [0,0,0,0])
+
+par_tr = get_standard_parameter_transformed_values(parameter)
+
+model_str="scheme_CO"
+
+simulation_axis = axis(name= "simulation_algorithm", labels= ["uniformization"])
+
+simulations =  simulate(model= model, parameter_transformed = par_tr, n_simulations= 512, experiment = experiment,
+                         observations = observations,
+                         simulation_algorithm= indexed_string_by(axis= simulation_axis, values=["uniformization"]),
+                         number_of_substeps = indexed_size_by(axis=simulation_axis,values= [1000]),
+                 seed = 0)
+
+simulation_file = write_csv(experiment= experiment, simulations=simulations,
+   path= "figures/data/figure_2_irt_closed_test_simulation")
+
+# 6-way comparison. I family carries the three IRT organizations + micro
+# reference; M family carries the base + micro reference for context.
+algorithm_axis = axis(name= "algorithm",
+    labels= [ "macro_MR", "micro_MR",
+              "macro_IR", "macro_IRT", "macro_IRT_closed", "micro_IR"])
+
+algo_recursive_approximation = indexed_bool_by(axis= algorithm_axis,
+    values=[true,  true,   true,  true,  true,  true ])
+
+# av: 1 = M (single landing-state average), 2 = I (full ij pair).
+algo_averaging = indexed_int_by(axis= algorithm_axis,
+    values=[ 1, 1,   2, 2, 2, 2])
+
+# Taylor variance correction (rank-2 Newton): only macro_IRT.
+algo_taylor_variance_correction = indexed_bool_by(axis= algorithm_axis,
+    values=[false, false,  false, true,  false, false])
+
+# Closed-form (Schur) variance correction: only macro_IRT_closed. This is the
+# NEW dedicated policy bit; mutually exclusive with taylor_variance_correction.
+algo_closed_form_variance_correction = indexed_bool_by(axis= algorithm_axis,
+    values=[false, false,  false, false, true,  false])
+
+# micro = exact per-channel likelihood (the reference) for both M and I.
+algo_micro_approximation     = indexed_bool_by(axis= algorithm_axis,
+    values=[false, true,   false, false, false, true ])
+
+# Eigen path (taylor_qdt=false) throughout: Nch<=10, k=2 — eigen is
+# well-conditioned and sidesteps the calc_Qdt_taylor moment-seed bug
+# (project_qdt_taylor_seed_bug.md).
+algo_taylor_qdt_approximation = indexed_bool_by(axis= algorithm_axis,
+    values=[false, false,  false, false, false, false])
+
+algorithms = build_likelihood_function(model = model,
+            adaptive_approximation     = false,
+            recursive_approximation    = algo_recursive_approximation,
+            averaging_approximation    = algo_averaging,
+            variance_approximation     = true,
+            taylor_variance_correction = algo_taylor_variance_correction,
+            closed_form_variance_correction = algo_closed_form_variance_correction,
+            micro_approximation        = algo_micro_approximation,
+            taylor_qdt_approximation   = algo_taylor_qdt_approximation)
+
+dlikelihood_predictions = calc_dlikelihood_predictions(likelihood_algorithm =algorithms, parameters=par_tr, experiment =experiment,
+data_series = simulations)
+
+numerical_fisher_information = calc_numerical_fisher_information(
+    likelihood_algorithm = algorithms, parameters = par_tr, experiment = experiment,
+    data_series = simulations, h_rel = 1e-5, decimate = 1)
+
+likelihood_analysis = likelihood_derivative_basic_diagnostics_paired(
+    dlikelihood_predictions = dlikelihood_predictions,
+    numerical_fisher_information = numerical_fisher_information,
+    n_boostrap_samples = 100,
+    probits = [ 0.025 , 0.975 ] , seed=0, max_lag=10,
+    samples_dir = "figures/data/figure_2_irt_closed_test_samples")
+
+likelihood_analysis_res = write_csv(analysis = likelihood_analysis,
+   path= "figures/data/figure_2_irt_closed_test_basic_diagnostics")

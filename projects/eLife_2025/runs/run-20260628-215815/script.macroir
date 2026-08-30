@@ -1,0 +1,78 @@
+# figure_3_time.macroir — ENSEMBLE per-step residuals for the Fig 3 DATA-LEVEL panel.
+# (this is what Luciano called "figure_2_time"; named figure_3_time for the renumber.)
+#
+# WHY an ensemble (not one recording): the data-level calibration is TIME-RESOLVED.
+# At each time t we want, ACROSS recordings:
+#   mean_t[r_std] ~ 0   (no bias at that phase)         <- needs many recordings
+#   var_t[r_std]  ~ 1   (predictive variance right)     <- the "unrolled" NIS
+#   autocorr of r_std vs lag ~ 0 beyond lag 0 (white)   <- the optimal-filter / Munch Box 1 test
+# From ONE recording you have a single noisy r_std(t); you cannot read calibration
+# per-time. So we simulate an ENSEMBLE and aggregate (mean/var/autocorr + bootstrap CI) in R.
+#
+# DATA PATH: calc_likelihood_diagnostic is single-recording; calc_dlikelihood_predictions
+# runs over the ENSEMBLE (data_series = simulations, as in figure_3_mle) and emits
+# per-step y_mean / y_var / r_std (seen in figure_1_dlikelihood_predictions). We write the
+# RAW per-(simulation_index, n_step) output, NOT the aggregated battery, so R can do
+# mean_t / var_t / autocorr.
+#
+# CELL (matches the Fig 3 corner): scheme_CO, N_ch=100, noise=1, interval_in_tau=0.1.
+#   - noise label "1" -> Current_Noise = 0.001  (dispatch_figure_3_local.sh: 0.1->1e-4, 1->1e-3)
+#   - interval 0.1     -> exp_n_step = (20, 40, 40); n_samp = 50 (grid length; the time axis
+#                          is the 3*50 = 150 samples, shared by all recordings).
+#   - n_simulations    = 1000 (tight per-time mean/var; scale to 10000 for tighter CI).
+#
+# RUN LOCALLY (no example), from where "figures/data/" resolves (as for figure_1):
+#   build/gcc-release/macrodr_cli projects/eLife_2025/ops/local/figure_3_time.macroir
+# Output: figures/data/figure_3_time_dlik_IR.csv  (per simulation_index x n_step: r_std,y_mean,y_var,...)
+#
+# TWO DSL BITS TO CONFIRM (test first with n_simulations small, e.g. 8): (1) that the raw
+# write_csv of a dlikelihood over `simulations` keeps DISTINCT simulation_index values;
+# (2) if a lighter non-derivative ensemble-predictions command exists, swap it in (the
+# gradient columns here are unused by this panel).
+
+model = load_model("scheme_CO")
+
+parameter = create_parameters(
+   model = model,
+   parameters_info = [
+      {"on","Log10",10},
+      {"off","Log10",100},
+      {"unitary_current","Log10",1},
+      {"Current_Noise","Log10",0.001},
+      {"Current_Baseline","Log10",1},
+      {"Num_ch_mean","Log10", 100}])
+
+experiment = create_experiment(
+   experiment_structure = [{20,50,0.0},{40,50,10.0},{40,50,0.0}],
+   frequency_of_sampling = 50e3,
+   initial_agonist = 0.0,
+   initial_time = 0.0)
+
+observations = set_observations(values_set = [0,0,0,0])
+
+par_tr = get_standard_parameter_transformed_values(parameter)
+
+# Ensemble of recordings (figure_3_mle simulate path).
+simulation_axis = axis(name = "simulation_algorithm", labels = ["uniformization"])
+
+simulations = simulate(
+   model = model, parameter_transformed = par_tr, n_simulations = 8,   # TEST value; scale to 1000-10000 once the CSV is confirmed
+   experiment = experiment, observations = observations,
+   simulation_algorithm = indexed_string_by(axis = simulation_axis, values = ["uniformization"]),
+   number_of_substeps = indexed_size_by(axis = simulation_axis, values = [1000]),
+   seed = 0)
+
+macro_IR = build_likelihood_function(
+   model = model,
+   adaptive_approximation = 0, recursive_approximation = 1, averaging_approximation = 2,
+   variance_approximation = 1, taylor_variance_correction = 0,
+   micro_approximation = false, taylor_qdt_approximation = false)
+
+# Per-step predictions over the WHOLE ensemble -> per-(simulation_index, n_step) r_std/y_mean/y_var.
+dlik_IR = calc_dlikelihood_predictions(
+   likelihood_algorithm = macro_IR, parameters = par_tr, experiment = experiment,
+   data_series = simulations)
+
+dlik_file = write_csv(
+   experiment = experiment, simulations = simulations, likelihood = dlik_IR,
+   path = "figures/data/figure_3_time_dlik_IR")
